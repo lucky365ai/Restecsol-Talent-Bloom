@@ -1,58 +1,85 @@
-# Deployment Guide for Restecsol Talent Bloom
+# Complet Deployment Guide (Netlify + Supabase)
 
-This project is a **Vite + React** single-page application (SPA) with a **Supabase** backend. It is currently configured with a Git remote and is ready for deployment to static hosting platforms like Vercel or Netlify.
+Follow these steps to deploy your app to Netlify.
 
-## Prerequisites
-1.  **GitHub Repository**: Ensure your latest changes are pushed to GitHub.
-    *   Current Remote: `https://github.com/lucky365ai/Restecsol-Talent-Bloom.git`
-2.  **Supabase Project**: Ensure your Supabase project (`ppprclvarnrhthpbyqyf`) is running and has the necessary tables created (migrations applied).
+## Phase 1: Database Setup (Supabase)
 
-## Option 1: Deploy to Vercel (Recommended)
+**Crucial**: If you haven't already, you must create the tables in your Supabase project.
 
-Vercel is the creator of Next.js and has excellent support for Vite apps.
+1.  Go to your [Supabase Dashboard](https://supabase.com/dashboard/project/tgcyedsgcljsjrwaafri).
+2.  Click **SQL Editor** (left sidebar) -> **New query**.
+3.  Run this SQL:
 
-1.  **Sign Up/Log In**: Go to [vercel.com](https://vercel.com) and log in with your GitHub account.
-2.  **Add New Project**:
-    *   Click **"Add New..."** -> **"Project"**.
-    *   Import the repository **`Restecsol-Talent-Bloom`**.
-3.  **Configure Project**:
-    *   **Framework Preset**: It should automatically detect **Vite**.
-    *   **Root Directory**: Leave as `./` (default).
-    *   **Build Command**: `vite build` (or `npm run build`).
-    *   **Output Directory**: `dist`.
-4.  **Environment Variables** (Crucial):
-    *   Expand the **"Environment Variables"** section.
-    *   Copy the values from your local `.env` file and add them key-by-key:
-        *   `VITE_SUPABASE_PROJECT_ID`: `ppprclvarnrhthpbyqyf`
-        *   `VITE_SUPABASE_URL`: `https://ppprclvarnrhthpbyqyf.supabase.co`
-        *   `VITE_SUPABASE_PUBLISHABLE_KEY`: *(Copy the long key starting with eyJ...)*
-5.  **Deploy**: Click **"Deploy"**.
-    *   Vercel will build your site and verify deployment.
-    *   Once done, you will get a live URL (e.g., `restecsol-talent-bloom.vercel.app`).
+```sql
+-- Create profiles table
+create table public.profiles (
+  id uuid references auth.users on delete cascade not null primary key,
+  email text,
+  full_name text,
+  avatar_url text,
+  updated_at timestamp with time zone,
+  talent text,
+  sub_talent text,
+  level text,
+  theme_key text default 'unknown',
+  theme_mode text default 'system',
+  cursor_emoji text
+);
+alter table public.profiles enable row level security;
+create policy "Public profiles are viewable by everyone." on profiles for select using ( true );
+create policy "Users can insert their own profile." on profiles for insert with check ( auth.uid() = id );
+create policy "Users can update own profile." on profiles for update using ( auth.uid() = id );
 
-## Option 2: Deploy to Netlify
+-- Create lessons table
+create table public.lessons (
+  id uuid default gen_random_uuid() primary key,
+  title text not null,
+  description text,
+  content text,
+  sort_order integer,
+  user_id uuid references auth.users(id)
+);
+alter table public.lessons enable row level security;
+create policy "Users can view their own lessons" on lessons for select using (auth.uid() = user_id);
 
-1.  **Sign Up/Log In**: Go to [netlify.com](https://netlify.com).
+-- Create lesson_progress table
+create table public.lesson_progress (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id),
+  lesson_id uuid references public.lessons(id),
+  state text default 'Not Started',
+  time_spent_seconds integer default 0,
+  score integer,
+  completed_at timestamp with time zone
+);
+alter table public.lesson_progress enable row level security;
+create policy "Users can view their own progress" on lesson_progress for select using (auth.uid() = user_id);
+create policy "Users can insert progress" on lesson_progress for insert with check (auth.uid() = user_id);
+create policy "Users can update progress" on lesson_progress for update using (auth.uid() = user_id);
+```
+
+## Phase 2: Deploy to Netlify
+
+1.  **Log in**: Go to [netlify.com](https://netlify.com) and log in with GitHub.
 2.  **Add New Site**: Click **"Add new site"** -> **"Import from an existing project"**.
-3.  **Connect to GitHub**: Select GitHub and authorize.
-4.  **Select Repo**: Choose **`Restecsol-Talent-Bloom`**.
-5.  **Build Settings**:
+3.  **Connect to GitHub**: Authorize and select `Restecsol-Talent-Bloom`.
+4.  **Build Settings**:
     *   **Build command**: `npm run build`
     *   **Publish directory**: `dist`
-6.  **Environment Variables**:
-    *   Click **"Show advanced"** or go to "Site settings" > "Environment variables" after creation.
-    *   Add the same variables as above (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, etc.).
-7.  **Deploy Site**: Click **"Deploy site"**.
+5.  **Environment Variables** (Click "Show advanced" or "Environment variables"):
+    *   Add these 3 keys (copy values from your local `.env`):
+        *   `VITE_SUPABASE_PROJECT_ID`: `tgcyedsgcljsjrwaafri`
+        *   `VITE_SUPABASE_URL`: `https://tgcyedsgcljsjrwaafri.supabase.co`
+        *   `VITE_SUPABASE_PUBLISHABLE_KEY`: `sb_publishable_gyxbq3hzpm6VX_dIvK7Htw__P5Rxr7l`
+6.  **Deploy**: Click **"Deploy site"**.
 
-## Post-Deployment Checks
+## Phase 3: Final Config
 
-1.  **Visit the URL**: Open your deployed link.
-2.  **Test Auth**: Try logging in/signing up to ensure the Supabase connection (Authentication) works.
-    *   *Note*: You may need to add your production URL (e.g., `https://your-app.vercel.app`) to "Site URL" and "Redirect URLs" in your **Supabase Dashboard** -> **Authentication** -> **URL Configuration**. If you don't do this, login redirects might fail.
-3.  **Check Console**: If something is broken, check the browser developer console (F12) for errors.
+1.  **Get Live URL**: Copy your Netlify URL (e.g., `https://funny-pika.netlify.app`).
+2.  **Update Supabase**:
+    *   Go to **Supabase Dashboard** -> **Authentication** -> **URL Configuration**.
+    *   **Site URL**: Paste your Netlify URL.
+    *   **Redirect URLs**: Paste your Netlify URL (and maybe add `/**` at the end).
+    *   Click **Save**.
 
-## Backend (Supabase)
-
-Your backend is managed by Supabase, so there is no separate deployment step for it provided you are pointing to the live instance. However, ensure that:
-*   Your database schema (tables/columns) in the live Supabase project matches what your app expects.
-*   Row Level Security (RLS) policies are set correctly to secure your data.
+The app is now live on Netlify!
